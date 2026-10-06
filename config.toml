@@ -2,4 +2,3 @@
 power-saver = "__legacy_powersave_extreme__"
 balanced = "__legacy_cool_and_breezy__"
 performance = "__legacy_default__"
-_invalid = "profile"
