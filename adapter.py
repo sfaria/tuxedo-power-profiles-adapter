@@ -20,21 +20,17 @@ import builtins
 import functools
 print = functools.partial(builtins.print, flush=True)
 
-# ---- tccd DBus ----
 TCCD_BUS = "com.tuxedocomputers.tccd"
 TCCD_PATH = "/com/tuxedocomputers/tccd"
 TCCD_INTERFACE = "com.tuxedocomputers.tccd"
 
-# ---- PowerProfiles API ----s
 BUS_NAME = "org.freedesktop.UPower.PowerProfiles"
 OBJECT_PATH = "/"+BUS_NAME.replace(".", "/")
 INTERFACE = BUS_NAME
     
-# ---- Config ----
 CONFIG_PATH = "/etc/tuxedo-power-profiles-adapter/config.toml"
 
-# How often to re-read the active tccd profile, to notice changes made outside
-# the adapter (TCC GUI, automatic AC/battery switching). tccd has no signal for this.
+# Polled because tccd has no signal for profile changes made elsewhere.
 POLL_INTERVAL = 2
 
 DEFAULT_MAP = {
@@ -43,7 +39,6 @@ DEFAULT_MAP = {
     "performance": "__legacy_default__",
 }
 
-# load_config reads the config file and returns a mapping of PowerProfiles profile names to tccd profile IDs.
 def load_config():
     import tomllib
 
@@ -80,8 +75,6 @@ PROFILE_MAP = load_config()
 REVERSE_MAP = {v: k for k, v in PROFILE_MAP.items()}
 
 
-# TccdClient is responsible for communicating with tccd over D-Bus and providing 
-# a simple API for getting the active profile and setting a new profile.
 class TccdClient:
 
     def __init__(self, bus):
@@ -110,8 +103,6 @@ class TccdClient:
         return await self.iface.call_set_temp_profile_by_id(profile_id)
 
 
-# PowerProfiles adapter implementation. 
-# This class implements the PowerProfiles D-Bus API and translates calls to the tccd client.
 class PowerProfiles(ServiceInterface):
 
     def __init__(self, tccd):
@@ -122,7 +113,7 @@ class PowerProfiles(ServiceInterface):
 
         self._active = "balanced"
 
-        # Keeps polling from reading tccd while a profile switch is in progress.
+        # Stops a poll from reverting _active while a switch is in flight.
         self._lock = asyncio.Lock()
 
         self._profiles = [
@@ -140,8 +131,6 @@ class PowerProfiles(ServiceInterface):
         if tccd_id in REVERSE_MAP:
             self._active = REVERSE_MAP[tccd_id]
 
-    # poll_tccd follows profile changes made outside the adapter and announces them.
-    # A tccd profile that isn't in the profile map leaves ActiveProfile unchanged.
     async def poll_tccd(self):
 
         while True:
@@ -179,8 +168,7 @@ class PowerProfiles(ServiceInterface):
 
         return self._active
 
-    # The setter is async so dbus-next waits for tccd before replying to the caller,
-    # and sends any error back to them instead of losing it.
+    # async so dbus-next waits for it before replying and returns its errors to the caller.
     @ActiveProfile.setter
     async def ActiveProfile(self, value: "s"):
 
@@ -200,7 +188,7 @@ class PowerProfiles(ServiceInterface):
 
         print(f"tccd SetTempProfileById({tccd_id}) returned {ok}")
 
-        # tccd returns true even for unknown IDs, so this only catches outright refusals.
+        # tccd returns true even for unknown IDs.
         if not ok:
             raise DBusError(ErrorType.FAILED, f"tccd refused profile {tccd_id}")
 

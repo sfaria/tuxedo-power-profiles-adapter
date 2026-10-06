@@ -17,7 +17,6 @@ FILES=(
   /usr/share/polkit-1/actions/$NAME.policy
 )
 
-# Fails harmlessly if the service was never installed.
 sudo systemctl disable --now $NAME.service 2>/dev/null || true
 
 sudo rm -fv "${FILES[@]}"
